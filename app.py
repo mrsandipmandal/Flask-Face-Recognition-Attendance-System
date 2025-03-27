@@ -25,36 +25,47 @@ pose_order = ["front", "up", "down", "left", "right"]
 current_pose_idx = 0
 
 # Database initialization
-def init_db():
-    conn = sqlite3.connect('attendance.db')
+def init_db(db_name='attendance.db'):
+    # Check if database file exists
+    db_exists = os.path.exists(db_name)
+    
+    # Connect to database (will create it if it doesn't exist)
+    conn = sqlite3.connect(db_name)
     cursor = conn.cursor()
     
-    cursor.execute("DROP TABLE IF EXISTS attendance_employee")
+    # Only create tables if database didn't exist before
+    if not db_exists:
+        # Create attendance_employee table
+        cursor.execute('''CREATE TABLE attendance_employee (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(100) NOT NULL,
+            emp_id VARCHAR(50) NOT NULL UNIQUE,
+            front_image VARCHAR(100),
+            up_image VARCHAR(100),
+            down_image VARCHAR(100),
+            left_image VARCHAR(100),
+            right_image VARCHAR(100),
+            face_encoding BLOB NULL
+        )''')
+        
+        # Create attendance table
+        cursor.execute('''CREATE TABLE attendance (
+            name TEXT,
+            time TEXT,
+            date DATE,
+            path VARCHAR(100),
+            UNIQUE(name, date)
+        )''')
+        
+        conn.commit()
+        print(f"Database '{db_name}' and tables created successfully")
+    else:
+        print(f"Database '{db_name}' already exists")
     
-    cursor.execute('''CREATE TABLE IF NOT EXISTS attendance_employee (
-        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-        name VARCHAR(100) NOT NULL,
-        emp_id VARCHAR(50) NOT NULL UNIQUE,
-        front_image VARCHAR(100),
-        up_image VARCHAR(100),
-        down_image VARCHAR(100),
-        left_image VARCHAR(100),
-        right_image VARCHAR(100),
-        face_encoding BLOB NULL
-    )''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS attendance (
-        name TEXT,
-        time TEXT,
-        date DATE,
-        path VARCHAR(100),
-        UNIQUE(name, date)
-    )''')
-    
-    conn.commit()
     conn.close()
 
-init_db()
+if __name__ == "__main__":
+    init_db()
 
 # def estimate_head_pose(landmarks):
 #     # Key landmarks
