@@ -12,6 +12,7 @@
                     <th>Select</th>
                     <th>Name</th>
                     <th>Employee ID</th>
+                    <th>images</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -21,6 +22,13 @@
                         <td><input type="checkbox" name="emp_ids" value="{{ emp_id }}" checked></td>
                         <td>{{ name }}</td>
                         <td>{{ emp_id }}</td>
+                        <td>
+                            {% if front_image %}
+                                <img src="{{ url_for('serve_image', image_path=front_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                            {% else %}
+                                No Image
+                            {% endif %}                                    
+                        </td>
                         <td>
                             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ id }}">Edit</button>
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addFacesModal{{ id }}">Add Faces</button>
@@ -74,7 +82,7 @@
                         <form id="addFacesForm{{ id }}" method="POST" action="{{ url_for('collect_faces') }}">
                             <input type="hidden" name="emp_id" value="{{ emp_id }}">
                             <input type="hidden" name="name" value="{{ name }}">
-                            <div class="mb-3">
+                            <div class="mb-3" hidden>
                                 <label class="form-label">Capture Mode</label>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="capture_mode" id="auto{{ id }}" value="auto" checked>

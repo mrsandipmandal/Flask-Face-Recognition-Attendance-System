@@ -16,13 +16,27 @@ app = Flask(__name__)
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor('data/data_dlib/shape_predictor_68_face_landmarks.dat')
 face_reco_model = dlib.face_recognition_model_v1("data/data_dlib/dlib_face_recognition_resnet_model_v1.dat")
-path_photos_from_camera = "data/data_faces_from_camera/"
+path_photos_from_camera = "data/faces/"
 attendance_path = "data/attendance/"
 current_face_dir = ""
 captured_poses = {}
-manual_capture = False
+manual_capture = True
 pose_order = ["front", "up", "down", "left", "right"]
 current_pose_idx = 0
+
+# Camera setup
+def init_camera():
+    global cap
+    if cap is not None:
+        cap.release()
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        logging.warning("CAP_DSHOW failed, trying default backend")
+        cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        logging.error("Failed to open camera with any backend")
+        return False
+    return True
 
 # Database initialization
 def init_db(db_name='attendance.db'):
@@ -54,7 +68,7 @@ def init_db(db_name='attendance.db'):
             emp_id VARCHAR(50) NOT NULL UNIQUE,
             name TEXT,
             time TEXT,
-            date DATE NOT NULL UNIQUE,
+            date DATE NOT NULL,
             path VARCHAR(100)
         )''')
         
@@ -117,7 +131,6 @@ def estimate_head_pose(landmarks):
     logging.debug(f"Horizontal norm: {nose_to_eye_x_norm:.3f}")
     logging.debug(f"Mouth angle: {mouth_angle:.2f} degrees")
     
-    # Improved thresholds based on normalized values
     # Modified threshold for "up" detection to be more sensitive
     if nose_to_eye_y_norm < -0.005:  # Relaxed threshold for "up" detection
         return "up"
@@ -125,7 +138,7 @@ def estimate_head_pose(landmarks):
         return "down"
     elif nose_to_eye_x_norm < -0.25:  # Nose left of center = looking left
         return "left"
-    elif nose_to_eye_x_norm > 0.25:   # Nose right of center = looking right
+    elif nose_to_eye_x_norm > 0.20:   # Nose right of center = looking right
         return "right"
     else:  # Neutral position
         return "front"
@@ -168,7 +181,6 @@ def attendance():
         return render_template('index.html', selected_date=selected_date, attendance_data=attendance_data)
     return render_template('index.html', selected_date='', no_data=False)
 
-@app.route('/collect_faces', methods=['GET', 'POST'])# Modify the collect_faces route
 @app.route('/collect_faces', methods=['GET', 'POST'])
 def collect_faces():
     global current_face_dir, captured_poses, manual_capture, current_pose_idx
@@ -176,6 +188,8 @@ def collect_faces():
         name = request.form.get('name')
         emp_id = request.form.get('emp_id')  # This will be like "001"
         capture_mode = request.form.get('capture_mode', 'auto')
+        if name is None or emp_id is None:
+            return render_template('collect_faces.html', message="Name and Employee ID are required.")
         
         # First, insert the employee into the database
         conn = sqlite3.connect('attendance.db')
@@ -190,7 +204,7 @@ def collect_faces():
         if not os.path.isdir(path_photos_from_camera):
             os.makedirs(path_photos_from_camera)
         
-        current_face_dir = f"{path_photos_from_camera}person_{emp_id}_{name}"
+        current_face_dir = f"{path_photos_from_camera}{emp_id}_{name}"
         os.makedirs(current_face_dir, exist_ok=True)
         captured_poses = {}
         manual_capture = (capture_mode == 'manual')
@@ -204,38 +218,221 @@ def collect_faces():
                             instructions="Order: Front -> Up -> Down -> Left -> Right")
     return render_template('collect_faces.html')
 
-# Modify the gen_frames function
+# def gen_frames(emp_id):
+#     global captured_poses, manual_capture, current_pose_idx
+#     cap = cv2.VideoCapture(0)
+#     if not cap.isOpened():
+#         logging.error("Cannot open camera")
+#         yield b'Camera error'
+#         return
+    
+#     conn = sqlite3.connect('attendance.db')
+#     cursor = conn.cursor()
+#     logging.debug(f"Starting capture with captured_poses: {captured_poses}")
+
+#     while True:  # Changed to infinite loop to prevent stream breaking
+#         if len(captured_poses) >= 5:  # When all poses are captured, keep streaming but don't capture more
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#             frame = cv2.resize(frame, (640, 480))
+#             cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n'
+#                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             # continue
+#             break  # Exit the loop after streaming the last frame
+            
+#         ret, frame = cap.read()
+#         if not ret:
+#             logging.error("Failed to grab frame")
+#             break
+#         frame = cv2.resize(frame, (640, 480))
+#         faces = detector(frame, 0)
+#         pose = "None"
+#         logging.debug(f"Detected {len(faces)} faces")
+        
+#         if len(faces) == 1:
+#             d = faces[0]
+#             hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
+#             if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
+#                 shape = predictor(frame, d)
+#                 pose = estimate_head_pose(shape)
+#                 logging.debug(f"Pose detected: {pose}")
+                
+#                 # Fix: Check if current_pose_idx is within bounds before accessing pose_order
+#                 if current_pose_idx < len(pose_order):
+#                     expected_pose = pose_order[current_pose_idx]
+#                     if not manual_capture and pose == expected_pose and pose not in captured_poses:
+#                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
+#                         if is_image_clear(face_roi):
+#                             # Use numeric emp_id format like "001_front"
+#                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+#                             cv2.imwrite(image_path, face_roi)
+#                             captured_poses[pose] = image_path
+#                             logging.info(f"Captured {pose} at {image_path}")
+#                             current_pose_idx += 1
+                            
+#                             # Update database with image path
+#                             column_name = f"{pose}_image"
+#                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
+#                                          (image_path, emp_id))
+#                             conn.commit()
+#                         else:
+#                             logging.debug(f"Image for {pose} is blurry, skipping")
+            
+#             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
+        
+#         # Only show "Next" text if we haven't captured all poses
+#         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#         if current_pose_idx < len(pose_order):
+#             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+#         cv2.putText(frame, f"Captured: {len(captured_poses)}/5", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+#         ret, buffer = cv2.imencode('.jpg', frame)
+#         frame = buffer.tobytes()
+#         yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+#     # Generate and save face encoding when done
+#     if len(captured_poses) == 5:
+#         face_encoding = generate_3d_face_encoding(captured_poses)
+#         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
+#                       (face_encoding, emp_id))
+#         conn.commit()
+#         logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
+    
+#     conn.close()
+#     cap.release()
+
+# def gen_frames(emp_id):
+#     global captured_poses, manual_capture, current_pose_idx
+#     cap = cv2.VideoCapture(0)
+#     if not cap.isOpened():
+#         logging.error("Cannot open camera")
+#         yield b'Camera error'
+#         return
+    
+#     conn = sqlite3.connect('attendance.db')
+#     cursor = conn.cursor()
+#     logging.debug(f"Starting capture with captured_poses: {captured_poses}")
+
+#     while True:
+#         if len(captured_poses) >= 5:  
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#             frame = cv2.resize(frame, (640, 480))
+#             cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n'
+#                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             break  # Stop the video feed after displaying the message
+            
+#         ret, frame = cap.read()
+#         if not ret:
+#             logging.error("Failed to grab frame")
+#             break
+#         frame = cv2.resize(frame, (640, 480))
+#         faces = detector(frame, 0)
+#         pose = "None"
+#         logging.debug(f"Detected {len(faces)} faces")
+        
+#         if len(faces) == 1:
+#             d = faces[0]
+#             hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
+#             if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
+#                 shape = predictor(frame, d)
+#                 pose = estimate_head_pose(shape)
+#                 logging.debug(f"Pose detected: {pose}")
+                
+#                 if current_pose_idx < len(pose_order):
+#                     expected_pose = pose_order[current_pose_idx]
+#                     if not manual_capture and pose == expected_pose and pose not in captured_poses:
+#                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
+#                         if is_image_clear(face_roi):
+#                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+                            
+#                             # Check if image exists, if so, remove it
+#                             if os.path.exists(image_path):
+#                                 os.remove(image_path)
+#                                 logging.info(f"Old image {image_path} removed")
+                            
+#                             # Save new image
+#                             cv2.imwrite(image_path, face_roi)
+#                             captured_poses[pose] = image_path
+#                             logging.info(f"Captured {pose} at {image_path}")
+#                             current_pose_idx += 1
+                            
+#                             # Update database with new image path
+#                             column_name = f"{pose}_image"
+#                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
+#                                          (image_path, emp_id))
+#                             conn.commit()
+#                         else:
+#                             logging.debug(f"Image for {pose} is blurry, skipping")
+            
+#             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
+        
+#         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#         if current_pose_idx < len(pose_order):
+#             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+#         cv2.putText(frame, f"Captured: {len(captured_poses)}/5", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+#         ret, buffer = cv2.imencode('.jpg', frame)
+#         frame = buffer.tobytes()
+#         yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+#     if len(captured_poses) == 5:
+#         face_encoding = generate_3d_face_encoding(captured_poses)
+#         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
+#                       (face_encoding, emp_id))
+#         conn.commit()
+#         logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
+    
+#     conn.close()
+#     cap.release()
+
+def is_image_clear(image, threshold=30):
+    logging.debug("Calling is_image_clear() function")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    logging.debug(f"Blur Score: {laplacian_var}, Threshold: {threshold}")
+    return laplacian_var > threshold
+
 def gen_frames(emp_id):
     global captured_poses, manual_capture, current_pose_idx
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        logging.error("Cannot open camera")
+        # logging.error("Cannot open camera")
         yield b'Camera error'
         return
     
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    
-    while True:  # Changed to infinite loop to prevent stream breaking
-        if len(captured_poses) >= 5:  # When all poses are captured, keep streaming but don't capture more
+    # logging.debug(f"Starting capture with captured_poses: {captured_poses}")
+
+    while True:
+        if len(captured_poses) >= 5:  
             ret, frame = cap.read()
             if not ret:
                 break
             frame = cv2.resize(frame, (640, 480))
-            cv2.putText(frame, "All poses captured!", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             ret, buffer = cv2.imencode('.jpg', frame)
             yield (b'--frame\r\n'
                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-            continue
+            break  # Stop the video feed after displaying the message
             
         ret, frame = cap.read()
         if not ret:
-            logging.error("Failed to grab frame")
+            # logging.error("Failed to grab frame")
             break
         frame = cv2.resize(frame, (640, 480))
         faces = detector(frame, 0)
         pose = "None"
-        logging.debug(f"Detected {len(faces)} faces")
+        # logging.debug(f"Detected {len(faces)} faces")
         
         if len(faces) == 1:
             d = faces[0]
@@ -244,28 +441,36 @@ def gen_frames(emp_id):
                 shape = predictor(frame, d)
                 pose = estimate_head_pose(shape)
                 logging.debug(f"Pose detected: {pose}")
-                expected_pose = pose_order[current_pose_idx]
-                if not manual_capture and pose == expected_pose and pose not in captured_poses:
-                    face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-                    if is_image_clear(face_roi):
-                        # Use numeric emp_id format like "001_front"
-                        image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
-                        cv2.imwrite(image_path, face_roi)
-                        captured_poses[pose] = image_path
-                        logging.info(f"Captured {pose} at {image_path}")
-                        current_pose_idx += 1
+                
+                if current_pose_idx < len(pose_order):
+                    expected_pose = pose_order[current_pose_idx]
+                    if not manual_capture and pose == expected_pose and pose not in captured_poses:
+                        face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
                         
-                        # Update database with image path
-                        column_name = f"{pose}_image"
-                        cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
-                                     (image_path, emp_id))
-                        conn.commit()
-                    else:
-                        logging.debug(f"Image for {pose} is blurry, skipping")
+                        if is_image_clear(face_roi):  # Only save if image is clear
+                            image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+                            
+                            # Check if image exists, if so, remove it
+                            if os.path.exists(image_path):
+                                os.remove(image_path)
+                                logging.info(f"Old image {image_path} removed")
+                            
+                            # Save new image
+                            cv2.imwrite(image_path, face_roi)
+                            captured_poses[pose] = image_path
+                            logging.info(f"Captured {pose} at {image_path}")
+                            current_pose_idx += 1
+                            
+                            # Update database with new image path
+                            column_name = f"{pose}_image"
+                            cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
+                                         (image_path, emp_id))
+                            conn.commit()
+                        else:
+                            logging.debug(f"Image for {pose} is blurry, skipping")  # Log message when skipping blur
             
             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
         
-        # Only show "Next" text if we haven't captured all poses
         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         if current_pose_idx < len(pose_order):
             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
@@ -276,7 +481,6 @@ def gen_frames(emp_id):
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
     
-    # Generate and save face encoding when done
     if len(captured_poses) == 5:
         face_encoding = generate_3d_face_encoding(captured_poses)
         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
@@ -286,7 +490,8 @@ def gen_frames(emp_id):
     
     conn.close()
     cap.release()
-    
+
+
 @app.route('/video_feed')
 def video_feed():
     emp_id = request.args.get('emp_id', 'EMP')
@@ -294,56 +499,70 @@ def video_feed():
 
 @app.route('/manual_capture', methods=['POST'])
 def manual_capture():
-    global captured_poses, manual_capture, current_pose_idx
+    global captured_poses, manual_capture, current_pose_idx, cap
     emp_id = request.form.get('emp_id', 'EMP')
-    if manual_capture and len(captured_poses) < 5:
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            logging.error("Cannot open camera for manual capture")
+    if not manual_capture:
+        return jsonify({'status': 'error', 'message': 'Not in manual mode'}), 400
+    if len(captured_poses) >= 5:
+        return jsonify({'status': 'error', 'message': 'All poses already captured'}), 400
+    
+    if cap is None or not cap.isOpened():
+        if not init_camera():
             return jsonify({'status': 'error', 'message': 'Camera not available'}), 500
-        ret, frame = cap.read()
-        if not ret:
-            logging.error("Failed to grab frame for manual capture")
-            cap.release()
-            return jsonify({'status': 'error', 'message': 'Failed to capture frame'}), 500
-        
-        frame = cv2.resize(frame, (640, 480))
-        faces = detector(frame, 0)
-        logging.debug(f"Manual capture: Detected {len(faces)} faces")
-        
-        if len(faces) == 1:
-            d = faces[0]
-            hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
-            if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
-                shape = predictor(frame, d)
-                pose = estimate_head_pose(shape)
-                expected_pose = pose_order[current_pose_idx]
-                logging.debug(f"Manual capture: Detected pose {pose}, Expected pose {expected_pose}")
-                if pose == expected_pose and pose not in captured_poses:
-                    face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-                    if is_image_clear(face_roi, threshold=50):  # Now this should work
-                        image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
-                        cv2.imwrite(image_path, face_roi)
-                        captured_poses[pose] = image_path
-                        logging.info(f"Manual capture: Captured {pose} at {image_path}")
-                        current_pose_idx += 1
-                        cap.release()
-                        return jsonify({'status': 'success', 'message': f'Captured {pose}', 'pose': pose})
-                    else:
-                        cap.release()
-                        return jsonify({'status': 'warning', 'message': 'Image too blurry, try again'})
-                else:
-                    cap.release()
-                    return jsonify({'status': 'warning', 'message': f'Wrong pose, expected {expected_pose}'})
-            else:
-                cap.release()
-                return jsonify({'status': 'error', 'message': 'Face out of bounds'})
-        else:
-            cap.release()
-            return jsonify({'status': 'error', 'message': 'No single face detected'})
-        cap.release()
-    return jsonify({'status': 'error', 'message': 'Not in manual mode or capture complete'}), 204
-
+    
+    ret, frame = cap.read()
+    if not ret:
+        logging.error("Failed to grab frame for manual capture, reinitializing")
+        init_camera()
+        return jsonify({'status': 'error', 'message': 'Failed to capture frame, retrying'}), 500
+    
+    frame = cv2.resize(frame, (640, 480))
+    faces = detector(frame, 0)
+    logging.debug(f"Manual capture: Detected {len(faces)} faces")
+    
+    if len(faces) != 1:
+        return jsonify({'status': 'error', 'message': f'Detected {len(faces)} faces, expected 1'}), 400
+    
+    d = faces[0]
+    hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
+    if not (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
+        return jsonify({'status': 'error', 'message': 'Face out of bounds'}), 400
+    
+    shape = predictor(frame, d)
+    pose = estimate_head_pose(shape)
+    expected_pose = pose_order[current_pose_idx]
+    logging.debug(f"Manual capture: Detected pose {pose}, Expected pose {expected_pose}, Captured poses: {list(captured_poses.keys())}")
+    
+    if pose != expected_pose:
+        return jsonify({'status': 'warning', 'message': f'Wrong pose, expected {expected_pose}, got {pose}'}), 400
+    
+    if pose in captured_poses:
+        return jsonify({'status': 'warning', 'message': f'{pose} already captured'}), 400
+    
+    face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
+    if not is_image_clear(face_roi, threshold=30):
+        return jsonify({'status': 'warning', 'message': 'Image too blurry, try again'}), 400
+    
+    image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+    cv2.imwrite(image_path, face_roi)
+    captured_poses[pose] = image_path
+    logging.info(f"Manual capture: Captured {pose} at {image_path}")
+    
+    conn = sqlite3.connect('attendance.db')
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE attendance_employee SET {pose}_image = ? WHERE emp_id = ?", (image_path, emp_id))
+    conn.commit()
+    
+    if len(captured_poses) == 5:
+        face_encoding = generate_3d_face_encoding(captured_poses)
+        cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?", (face_encoding, emp_id))
+        conn.commit()
+        logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
+    
+    current_pose_idx += 1
+    conn.close()
+    
+    return jsonify({'status': 'success', 'message': f'Captured {pose}', 'pose': pose, 'captured_count': len(captured_poses)})
 
 @app.route('/employee_list', methods=['GET', 'POST'])
 def employee_list():
