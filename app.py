@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, Response, send_file
+from flask import Flask, render_template, request, Response, send_file, jsonify
 import sqlite3
 from datetime import datetime
 import cv2
@@ -50,11 +50,12 @@ def init_db(db_name='attendance.db'):
         
         # Create attendance table
         cursor.execute('''CREATE TABLE attendance (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            emp_id VARCHAR(50) NOT NULL UNIQUE,
             name TEXT,
             time TEXT,
-            date DATE,
-            path VARCHAR(100),
-            UNIQUE(name, date)
+            date DATE NOT NULL UNIQUE,
+            path VARCHAR(100)
         )''')
         
         conn.commit()
@@ -67,102 +68,6 @@ def init_db(db_name='attendance.db'):
 if __name__ == "__main__":
     init_db()
 
-# def estimate_head_pose(landmarks):
-#     # Key landmarks
-#     nose_tip = landmarks.part(30)        # Nose tip
-#     chin = landmarks.part(8)             # Chin
-#     left_eye = landmarks.part(36)        # Left eye outer corner
-#     right_eye = landmarks.part(45)       # Right eye outer corner
-    
-#     # Calculate eye center as reference point
-#     eye_center_x = (left_eye.x + right_eye.x) / 2
-#     eye_center_y = (left_eye.y + right_eye.y) / 2
-    
-#     # Vertical movement (pitch: up/down) - Nose relative to eye center and chin
-#     nose_to_eye_y = nose_tip.y - eye_center_y  # Positive = nose below eyes, Negative = nose above eyes
-#     nose_to_chin_y = nose_tip.y - chin.y       # Positive = nose below chin (down), Negative = nose above chin (up)
-    
-#     # Horizontal movement (yaw: left/right) - Nose relative to eye center
-#     nose_to_eye_x = nose_tip.x - eye_center_x  # Positive = nose right of center, Negative = nose left of center
-    
-#     # Log all values for debugging
-#     logging.debug(f"Eye Center: ({eye_center_x:.1f}, {eye_center_y:.1f})")
-#     logging.debug(f"Nose: ({nose_tip.x}, {nose_tip.y}), Chin: ({chin.x}, {chin.y})")
-#     logging.debug(f"Vertical: nose_to_eye_y={nose_to_eye_y:.1f}, nose_to_chin_y={nose_to_chin_y:.1f}")
-#     logging.debug(f"Horizontal: nose_to_eye_x={nose_to_eye_x:.1f}")
-    
-#     # Define pose based on relative positions
-#     if nose_to_chin_y < -20:  # Nose significantly above chin = "up"
-#         return "up"
-#     elif nose_to_chin_y > 20:  # Nose significantly below chin = "down"
-#         return "down"
-#     elif nose_to_eye_x < -15:  # Nose significantly left of eye center = "left"
-#         return "left"
-#     elif nose_to_eye_x > 15:   # Nose significantly right of eye center = "right"
-#         return "right"
-#     else:                      # Neutral position = "front"
-#         return "front"
-# def estimate_head_pose(landmarks):
-#     """
-#     Improved head pose estimation using facial landmarks
-#     """
-#     # Key landmarks
-#     nose_tip = landmarks.part(30)        # Nose tip
-#     chin = landmarks.part(8)             # Chin
-#     left_eye_left = landmarks.part(36)   # Left eye left corner
-#     left_eye_right = landmarks.part(39)  # Left eye right corner
-#     right_eye_left = landmarks.part(42)  # Right eye left corner
-#     right_eye_right = landmarks.part(45) # Right eye right corner
-#     left_mouth = landmarks.part(48)      # Left mouth corner
-#     right_mouth = landmarks.part(54)     # Right mouth corner
-    
-#     # Calculate eye centers
-#     left_eye_center = ((left_eye_left.x + left_eye_right.x) // 2, 
-#                        (left_eye_left.y + left_eye_right.y) // 2)
-#     right_eye_center = ((right_eye_left.x + right_eye_right.x) // 2, 
-#                         (right_eye_left.y + right_eye_right.y) // 2)
-    
-#     # Calculate eye center as reference point
-#     eye_center_x = (left_eye_center[0] + right_eye_center[0]) // 2
-#     eye_center_y = (left_eye_center[1] + right_eye_center[1]) // 2
-    
-#     # Calculate eye width (distance between eyes)
-#     eye_width = np.sqrt((right_eye_center[0] - left_eye_center[0])**2 + 
-#                         (right_eye_center[1] - left_eye_center[1])**2)
-    
-#     # Calculate face height (distance from eyes to chin)
-#     face_height = np.sqrt((eye_center_x - chin.x)**2 + (eye_center_y - chin.y)**2)
-    
-#     # Normalize measurements relative to face dimensions
-#     # Vertical movement (pitch: up/down)
-#     nose_to_eye_y_norm = (nose_tip.y - eye_center_y) / face_height
-    
-#     # Horizontal movement (yaw: left/right)
-#     nose_to_eye_x_norm = (nose_tip.x - eye_center_x) / eye_width
-    
-#     # Calculate mouth angle for additional roll information
-#     mouth_angle = np.arctan2(right_mouth.y - left_mouth.y, 
-#                             right_mouth.x - left_mouth.x) * 180 / np.pi
-    
-#     # Log values for debugging
-#     logging.debug(f"Eye Center: ({eye_center_x}, {eye_center_y})")
-#     logging.debug(f"Nose: ({nose_tip.x}, {nose_tip.y}), Chin: ({chin.x}, {chin.y})")
-#     logging.debug(f"Vertical norm: {nose_to_eye_y_norm:.3f}")
-#     logging.debug(f"Horizontal norm: {nose_to_eye_x_norm:.3f}")
-#     logging.debug(f"Mouth angle: {mouth_angle:.2f} degrees")
-    
-#     # Improved thresholds based on normalized values
-#     # These thresholds should be tuned based on testing
-#     if nose_to_eye_y_norm < -0.5:  # Nose above eyes = looking up
-#         return "up"
-#     elif nose_to_eye_y_norm > 0.25:  # Nose below eyes = looking down
-#         return "down"
-#     elif nose_to_eye_x_norm < -0.25:  # Nose left of center = looking left
-#         return "left"
-#     elif nose_to_eye_x_norm > 0.25:   # Nose right of center = looking right
-#         return "right"
-#     else:  # Neutral position
-#         return "front"
 def estimate_head_pose(landmarks):
     """
     Improved head pose estimation using facial landmarks
@@ -395,12 +300,12 @@ def manual_capture():
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             logging.error("Cannot open camera for manual capture")
-            return '', 204
+            return jsonify({'status': 'error', 'message': 'Camera not available'}), 500
         ret, frame = cap.read()
         if not ret:
             logging.error("Failed to grab frame for manual capture")
             cap.release()
-            return '', 204
+            return jsonify({'status': 'error', 'message': 'Failed to capture frame'}), 500
         
         frame = cv2.resize(frame, (640, 480))
         faces = detector(frame, 0)
@@ -416,25 +321,29 @@ def manual_capture():
                 logging.debug(f"Manual capture: Detected pose {pose}, Expected pose {expected_pose}")
                 if pose == expected_pose and pose not in captured_poses:
                     face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-                    if is_image_clear(face_roi):
+                    if is_image_clear(face_roi, threshold=50):  # Now this should work
                         image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
                         cv2.imwrite(image_path, face_roi)
                         captured_poses[pose] = image_path
                         logging.info(f"Manual capture: Captured {pose} at {image_path}")
                         current_pose_idx += 1
+                        cap.release()
+                        return jsonify({'status': 'success', 'message': f'Captured {pose}', 'pose': pose})
                     else:
-                        logging.debug(f"Manual capture: Image for {pose} is blurry, skipping")
+                        cap.release()
+                        return jsonify({'status': 'warning', 'message': 'Image too blurry, try again'})
                 else:
-                    logging.debug(f"Manual capture: Pose {pose} does not match expected {expected_pose} or already captured")
+                    cap.release()
+                    return jsonify({'status': 'warning', 'message': f'Wrong pose, expected {expected_pose}'})
             else:
-                logging.debug("Manual capture: Face out of bounds")
+                cap.release()
+                return jsonify({'status': 'error', 'message': 'Face out of bounds'})
         else:
-            logging.debug("Manual capture: No single face detected")
-        
+            cap.release()
+            return jsonify({'status': 'error', 'message': 'No single face detected'})
         cap.release()
-    else:
-        logging.debug("Manual capture: Not in manual mode or already captured 5 poses")
-    return '', 204
+    return jsonify({'status': 'error', 'message': 'Not in manual mode or capture complete'}), 204
+
 
 @app.route('/employee_list', methods=['GET', 'POST'])
 def employee_list():
@@ -505,11 +414,12 @@ def start_attendance():
 def gen_attendance_frames():
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT emp_id, face_encoding FROM attendance_employee WHERE face_encoding IS NOT NULL")
+    cursor.execute("SELECT emp_id, name, face_encoding FROM attendance_employee WHERE face_encoding IS NOT NULL")
     known_faces = cursor.fetchall()
-    known_emp_ids = [emp_id for emp_id, _ in known_faces]
-    known_encodings = [np.frombuffer(encoding, dtype=np.float64) for _, encoding in known_faces]
-    
+    known_emp_ids = [emp_id for emp_id, _, _ in known_faces]
+    known_names = [name for _, name, _ in known_faces]
+    known_encodings = [np.frombuffer(encoding, dtype=np.float64) for _, _, encoding in known_faces]
+        
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         logging.error("Cannot open camera for attendance")
@@ -531,9 +441,10 @@ def gen_attendance_frames():
                 min_distance_idx = np.argmin(e_distances)
                 if e_distances[min_distance_idx] < 0.4:
                     emp_id = known_emp_ids[min_distance_idx]
+                    name = known_names[min_distance_idx]
                     current_date = datetime.now().strftime('%Y-%m-%d')
                     
-                    cursor.execute("SELECT COUNT(*) FROM attendance WHERE name = ? AND date = ?", (emp_id, current_date))
+                    cursor.execute("SELECT COUNT(*) FROM attendance WHERE emp_id = ? AND date = ?", (emp_id, current_date))
                     if cursor.fetchone()[0] == 0:
                         date_dir = f"{attendance_path}{current_date}/"
                         os.makedirs(date_dir, exist_ok=True)
@@ -541,12 +452,18 @@ def gen_attendance_frames():
                         cv2.imwrite(image_path, frame)
                         
                         current_time = datetime.now().strftime('%H:%M:%S')
-                        cursor.execute("INSERT INTO attendance (name, time, date, path) VALUES (?, ?, ?, ?)",
-                                       (emp_id, current_time, current_date, image_path))
+                        cursor.execute("INSERT INTO attendance (emp_id, name, time, date, path) VALUES (?, ?, ?, ?, ?)",
+                                       (emp_id, name, current_time, current_date, image_path))
                         conn.commit()
                     
-                    cv2.putText(frame, emp_id, (d.left(), d.bottom()), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-            cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (255, 255, 255), 2)
+                    # Draw emp_id just below the face
+                    cv2.putText(frame, f"{emp_id}", (d.left(), d.bottom() + 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+
+                    # Draw name below emp_id with an additional offset
+                    cv2.putText(frame, f"{name}", (d.left(), d.bottom() + 40), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+            cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (5, 214, 118), 2)
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
         yield (b'--frame\r\n'

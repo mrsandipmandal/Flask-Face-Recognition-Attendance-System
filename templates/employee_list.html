@@ -12,7 +12,6 @@
                     <th>Select</th>
                     <th>Name</th>
                     <th>Employee ID</th>
-                    <th>Image</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -23,14 +22,8 @@
                         <td>{{ name }}</td>
                         <td>{{ emp_id }}</td>
                         <td>
-                            {% if front_image %}
-                                <img src="{{ url_for('serve_image', image_path=front_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
-                            {% else %}
-                                No Image
-                            {% endif %}
-                        </td>
-                        <td>
                             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ id }}">Edit</button>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addFacesModal{{ id }}">Add Faces</button>
                         </td>
                     </tr>
                 {% endfor %}
@@ -59,10 +52,6 @@
                                 <label for="new_emp_id{{ id }}" class="form-label">Employee ID</label>
                                 <input type="text" class="form-control" id="new_emp_id{{ id }}" name="new_emp_id" value="{{ emp_id }}" required>
                             </div>
-                            <div class="mb-3">
-                                <label for="new_image{{ id }}" class="form-label">New Image (optional)</label>
-                                <input type="file" class="form-control" id="new_image{{ id }}" name="new_image" accept="image/*">
-                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -72,5 +61,91 @@
                 </div>
             </div>
         </div>
+
+        <!-- Add Faces Modal -->
+        <div class="modal fade" id="addFacesModal{{ id }}" tabindex="-1" aria-labelledby="addFacesModalLabel{{ id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addFacesModalLabel{{ id }}">Add Faces: {{ name }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addFacesForm{{ id }}" method="POST" action="{{ url_for('collect_faces') }}">
+                            <input type="hidden" name="emp_id" value="{{ emp_id }}">
+                            <input type="hidden" name="name" value="{{ name }}">
+                            <div class="mb-3">
+                                <label class="form-label">Capture Mode</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="capture_mode" id="auto{{ id }}" value="auto" checked>
+                                    <label class="form-check-label" for="auto{{ id }}">Automatic</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="capture_mode" id="manual{{ id }}" value="manual">
+                                    <label class="form-check-label" for="manual{{ id }}">Manual</label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Start Capture</button>
+                        </form>
+                        <div id="videoContainer{{ id }}" class="mt-3" style="display: none;">
+                            <img id="videoFeed{{ id }}" src="" alt="Video Feed" style="max-width: 100%;">
+                            <button id="captureButton{{ id }}" class="btn btn-success mt-2" style="display: none;" onclick="captureFace('{{ emp_id }}', '{{ id }}')">Capture</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     {% endfor %}
+
+    <script>
+        document.querySelectorAll('form[id^="addFacesForm"]').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const empId = this.querySelector('input[name="emp_id"]').value;
+                const id = this.id.replace('addFacesForm', '');
+                const captureMode = this.querySelector('input[name="capture_mode"]:checked').value;
+                const videoContainer = document.getElementById(`videoContainer${id}`);
+                const videoFeed = document.getElementById(`videoFeed${id}`);
+                const captureButton = document.getElementById(`captureButton${id}`);
+
+                videoContainer.style.display = 'block';
+                if (captureMode === 'auto') {
+                    videoFeed.src = `{{ url_for('video_feed') }}?emp_id=${empId}`;
+                    captureButton.style.display = 'none';
+                } else {
+                    videoFeed.src = `{{ url_for('video_feed') }}?emp_id=${empId}`;
+                    captureButton.style.display = 'block';
+                }
+            });
+        });
+
+    </script>
+
+    <script>
+    
+        function captureFace(empId, modalId) {
+            fetch('{{ url_for("manual_capture") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `emp_id=${empId}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = document.getElementById(`addFacesModal${modalId}`);
+                let alertDiv = modal.querySelector('.alert');
+                if (!alertDiv) {
+                    alertDiv = document.createElement('div');
+                    modal.querySelector('.modal-body').prepend(alertDiv);
+                }
+                alertDiv.className = `alert alert-${data.status === 'success' ? 'success' : data.status === 'warning' ? 'warning' : 'danger'}`;
+                alertDiv.textContent = data.message;
+                setTimeout(() => alertDiv.remove(), 3000); // Remove after 3 seconds
+            })
+            .catch(error => {
+                console.error('Error during manual capture:', error);
+            });
+        }
+    </script>
 {% endblock %}
