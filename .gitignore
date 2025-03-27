@@ -1,0 +1,56 @@
+# Byte-compiled and compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+
+# Environment variables
+.env
+*.env
+
+# Log files
+*.log
+logs/
+*.out
+
+# Database files
+*.sqlite3
+*.db
+
+# Instance folder (for Flask configurations)
+instance/
+
+# Pytest cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# VS Code settings
+.vscode/
+
+# Pip and dependency files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Flask migrations
+migrations/
+
+# Cache files
+cache/
+*.cache
+
+# Static files generated during runtime
+static/
+
+# Coverage reports
+.coverage
+htmlcov/
+*.jpg

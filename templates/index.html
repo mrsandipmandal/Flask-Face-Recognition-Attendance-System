@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Attendance System{% endblock %}
+{% block content %}
+    <h1>Attendance System</h1>
+    <form method="POST" action="{{ url_for('attendance') }}" class="mb-4">
+        <div class="mb-3">
+            <label for="selected_date" class="form-label">Select Date</label>
+            <input type="date" class="form-control" id="selected_date" name="selected_date" required>
+        </div>
+        <button type="submit" class="btn btn-primary">View Attendance</button>
+    </form>
+    {% if selected_date %}
+        <h2>Attendance for {{ selected_date }}</h2>
+        {% if no_data %}
+            <div class="alert alert-warning">No attendance data found for this date.</div>
+        {% else %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Time</th>
+                        <th>Image</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, time, path in attendance_data %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td>{{ time }}</td>
+                            <td><img src="{{ url_for('serve_image', image_path=path) }}" alt="{{ name }}" style="max-width: 100px;"></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    {% endif %}
+    <a href="{{ url_for('collect_faces') }}" class="btn btn-success">Collect Faces</a>
+    <a href="{{ url_for('employee_list') }}" class="btn btn-info">Employee List</a>
+    <a href="{{ url_for('take_attendance') }}" class="btn btn-warning">Take Attendance</a>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Employee List{% endblock %}
+{% block content %}
+    <h1>Employee List</h1>
+    {% if message %}
+        <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('employee_list') }}" class="mb-4">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Select</th>
+                    <th>Name</th>
+                    <th>Employee ID</th>
+                    <th>Image</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for id, name, emp_id, front_image in employees %}
+                    <tr>
+                        <td><input type="checkbox" name="emp_ids" value="{{ emp_id }}" checked></td>
+                        <td>{{ name }}</td>
+                        <td>{{ emp_id }}</td>
+                        <td>
+                            {% if front_image %}
+                                <img src="{{ url_for('serve_image', image_path=front_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                            {% else %}
+                                No Image
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ id }}">Edit</button>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <button type="submit" name="update_encodings" class="btn btn-primary">Update Face Encodings</button>
+    </form>
+
+    <!-- Edit Modals -->
+    {% for id, name, emp_id, front_image in employees %}
+        <div class="modal fade" id="editModal{{ id }}" tabindex="-1" aria-labelledby="editModalLabel{{ id }}" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editModalLabel{{ id }}">Edit Employee: {{ name }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('employee_list') }}" enctype="multipart/form-data">
+                        <div class="modal-body">
+                            <input type="hidden" name="emp_id" value="{{ emp_id }}">
+                            <div class="mb-3">
+                                <label for="name{{ id }}" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="name{{ id }}" name="name" value="{{ name }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="new_emp_id{{ id }}" class="form-label">Employee ID</label>
+                                <input type="text" class="form-control" id="new_emp_id{{ id }}" name="new_emp_id" value="{{ emp_id }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="new_image{{ id }}" class="form-label">New Image (optional)</label>
+                                <input type="file" class="form-control" id="new_image{{ id }}" name="new_image" accept="image/*">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" name="edit_employee" class="btn btn-warning">Save changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endblock %}
