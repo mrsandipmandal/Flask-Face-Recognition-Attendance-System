@@ -79,7 +79,7 @@
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="addFacesModalLabel{{ id }}">Add Faces: <span class="badge bg-blue-lt">{{ name }}</span></h5>
+                        <h5 class="modal-title" id="addFacesModalLabel{{ id }}">Add Faces : {{ name }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -99,10 +99,12 @@
                             </div>
                             <center><button type="submit" class="btn btn-primary">Start Capture</button></center>
                         </form>
+                        <center>
                         <div id="videoContainer{{ id }}" class="mt-3" style="display: none;">
                             <img id="videoFeed{{ id }}" src="" alt="Video Feed" style="max-width: 100%;">
                             <button id="captureButton{{ id }}" class="btn btn-success mt-2" style="display: none;" onclick="captureFace('{{ emp_id }}', '{{ id }}')">Capture</button>
                         </div>
+                        </center>
                     </div>
                 </div>
             </div>
