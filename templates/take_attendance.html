@@ -7,7 +7,9 @@
         <div class="alert alert-info">{{ message }}</div>
     {% endif %}
     {% if video_feed %}
+    <center>
         <h3>Live Attendance Feed</h3>
-        <center><img src="{{ url_for('attendance_feed') }}" class="img-fluid" alt="Attendance Feed"></center>
+        <img src="{{ url_for('attendance_feed') }}" class="img-fluid" alt="Attendance Feed">
+    </center>
     {% endif %}
 {% endblock %}

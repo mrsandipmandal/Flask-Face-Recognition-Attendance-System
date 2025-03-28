@@ -6,6 +6,8 @@ import os
 import numpy as np
 import dlib
 import logging
+from datetime import date
+
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -163,7 +165,8 @@ def generate_3d_face_encoding(images):
 
 @app.route('/')
 def index():
-    return render_template('index.html', selected_date='', no_data=False)
+    today = date.today().strftime('%Y-%m-%d')  # Format as YYYY-MM-DD for HTML date input
+    return render_template('index.html', selected_date='', no_data=False, today=today)
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
@@ -173,7 +176,7 @@ def attendance():
         formatted_date = selected_date_obj.strftime('%Y-%m-%d')
         conn = sqlite3.connect('attendance.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT name, time, path FROM attendance WHERE date = ?", (formatted_date,))
+        cursor.execute("SELECT name, time, path, emp_id FROM attendance WHERE date = ?", (formatted_date,))
         attendance_data = cursor.fetchall()
         conn.close()
         if not attendance_data:
@@ -688,10 +691,9 @@ def employee_list():
             conn.commit()
             message = f"Employee {old_emp_id} updated to {new_emp_id}"
     
-    # Fetch the latest employee data
-    cursor.execute("SELECT id, name, emp_id, front_image FROM attendance_employee GROUP BY emp_id")
+    # employee data for list
+    cursor.execute("SELECT id, name, emp_id, front_image, up_image, down_image, left_image, right_image FROM attendance_employee GROUP BY emp_id")
     employees = cursor.fetchall()
-    
     conn.close()
     return render_template('employee_list.html', employees=employees, message=message)
 
@@ -707,6 +709,88 @@ def take_attendance():
 def start_attendance():
     return render_template('take_attendance.html', message="Attendance started", video_feed=True)
 
+# def gen_attendance_frames():
+#     conn = sqlite3.connect('attendance.db')
+#     cursor = conn.cursor()
+#     cursor.execute("SELECT emp_id, name, face_encoding FROM attendance_employee WHERE face_encoding IS NOT NULL")
+#     known_faces = cursor.fetchall()
+#     known_emp_ids = [emp_id for emp_id, _, _ in known_faces]
+#     known_names = [name for _, name, _ in known_faces]
+#     known_encodings = [np.frombuffer(encoding, dtype=np.float64) for _, _, encoding in known_faces]
+        
+#     cap = cv2.VideoCapture(0)
+#     if not cap.isOpened():
+#         logging.error("Cannot open camera for attendance")
+#         yield b'Camera error'
+#         return
+    
+#     while True:
+#         ret, frame = cap.read()
+#         if not ret:
+#             logging.error("Failed to grab frame for attendance")
+#             break
+#         frame = cv2.resize(frame, (640, 480))
+#         faces = detector(frame, 0)
+#         for i, d in enumerate(faces):
+#             shape = predictor(frame, d)
+#             feature = face_reco_model.compute_face_descriptor(frame, shape)
+#             e_distances = [np.linalg.norm(feature - known_encoding) for known_encoding in known_encodings]
+#             if e_distances:
+#                 min_distance_idx = np.argmin(e_distances)
+#                 if e_distances[min_distance_idx] < 0.4:  # Adjust the threshold as needed
+#                     emp_id = known_emp_ids[min_distance_idx]
+#                     name = known_names[min_distance_idx]
+#                     current_date = datetime.now().strftime('%Y-%m-%d')
+                    
+#                     cursor.execute("SELECT COUNT(*) FROM attendance WHERE emp_id = ? AND date = ?", (emp_id, current_date))
+#                     if cursor.fetchone()[0] == 0:
+#                         date_dir = f"{attendance_path}{current_date}/"
+#                         os.makedirs(date_dir, exist_ok=True)
+#                         image_path = f"{date_dir}{emp_id}_{datetime.now().strftime('%H%M%S')}.jpg"
+#                         # cv2.imwrite(image_path, frame) # Save the image with full resolution
+
+#                         # Only save the face detection box only
+#                         # Extract face region with some margin
+#                         top, right, bottom, left = d.top(), d.right(), d.bottom(), d.left()
+#                         # Add some margin to the face region (20% of face size)
+#                         height, width = bottom - top, right - left
+#                         margin_h, margin_w = int(height * 0.2), int(width * 0.2)
+                        
+#                         # Ensure we don't go out of frame bounds
+#                         top_with_margin = max(0, top - margin_h)
+#                         bottom_with_margin = min(frame.shape[0], bottom + margin_h)
+#                         left_with_margin = max(0, left - margin_w)
+#                         right_with_margin = min(frame.shape[1], right + margin_w)
+                        
+#                         # Extract the face region with margin
+#                         face_image = frame[top_with_margin:bottom_with_margin, 
+#                                           left_with_margin:right_with_margin]
+                        
+#                         # Save only the face region instead of the full frame
+#                         cv2.imwrite(image_path, face_image)
+                                                
+#                         current_time = datetime.now().strftime('%H:%M:%S')
+#                         cursor.execute("INSERT INTO attendance (emp_id, name, time, date, path) VALUES (?, ?, ?, ?, ?)",
+#                                        (emp_id, name, current_time, current_date, image_path))
+#                         conn.commit()
+                    
+#                     # Draw emp_id
+#                     cv2.putText(frame, f"{emp_id}", (d.left() + 5, d.bottom() - 20), 
+#                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (5, 214, 118), 2)
+
+#                     # Draw name
+#                     cv2.putText(frame, f"{name}", (d.left() + 5, d.bottom() - 5), 
+#                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (5, 214, 118), 2)
+                    
+#             cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (5, 214, 118), 2)
+#         ret, buffer = cv2.imencode('.jpg', frame)
+#         frame = buffer.tobytes()
+#         yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+#     conn.close()
+#     cap.release()
+
 def gen_attendance_frames():
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
@@ -715,6 +799,10 @@ def gen_attendance_frames():
     known_emp_ids = [emp_id for emp_id, _, _ in known_faces]
     known_names = [name for _, name, _ in known_faces]
     known_encodings = [np.frombuffer(encoding, dtype=np.float64) for _, _, encoding in known_faces]
+    conn.close()
+    
+    # Track which employees have been marked present in this session
+    marked_today = set()
         
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -727,46 +815,104 @@ def gen_attendance_frames():
         if not ret:
             logging.error("Failed to grab frame for attendance")
             break
+            
         frame = cv2.resize(frame, (640, 480))
         faces = detector(frame, 0)
+        
         for i, d in enumerate(faces):
+            # Draw rectangle around every detected face
+            cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (5, 214, 118), 2)
+            
+            # Get face features
             shape = predictor(frame, d)
             feature = face_reco_model.compute_face_descriptor(frame, shape)
+            
+            # Compare with known faces
             e_distances = [np.linalg.norm(feature - known_encoding) for known_encoding in known_encodings]
             if e_distances:
                 min_distance_idx = np.argmin(e_distances)
-                if e_distances[min_distance_idx] < 0.4:
+                min_distance = e_distances[min_distance_idx]
+                
+                if min_distance < 0.4:  # Recognition threshold
                     emp_id = known_emp_ids[min_distance_idx]
                     name = known_names[min_distance_idx]
-                    current_date = datetime.now().strftime('%Y-%m-%d')
                     
-                    cursor.execute("SELECT COUNT(*) FROM attendance WHERE emp_id = ? AND date = ?", (emp_id, current_date))
-                    if cursor.fetchone()[0] == 0:
-                        date_dir = f"{attendance_path}{current_date}/"
-                        os.makedirs(date_dir, exist_ok=True)
-                        image_path = f"{date_dir}{emp_id}_{datetime.now().strftime('%H%M%S')}.jpg"
-                        cv2.imwrite(image_path, frame)
-                        
-                        current_time = datetime.now().strftime('%H:%M:%S')
-                        cursor.execute("INSERT INTO attendance (emp_id, name, time, date, path) VALUES (?, ?, ?, ?, ?)",
-                                       (emp_id, name, current_time, current_date, image_path))
-                        conn.commit()
+                    # Display recognition info
+                    cv2.putText(frame, f"{emp_id}", (d.left() + 5, d.bottom() - 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (5, 214, 118), 2)
+                    cv2.putText(frame, f"{name}", (d.left() + 5, d.bottom() - 5), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (5, 214, 118), 2)
+                    cv2.putText(frame, f"Match: {min_distance:.2f}", (d.left() + 5, d.top() - 5), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (5, 214, 118), 2)
                     
-                    # Draw emp_id just below the face
-                    cv2.putText(frame, f"{emp_id}", (d.left(), d.bottom() + 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-
-                    # Draw name below emp_id with an additional offset
-                    cv2.putText(frame, f"{name}", (d.left(), d.bottom() + 40), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-            cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (5, 214, 118), 2)
+                    # Mark attendance if not already marked today
+                    if emp_id not in marked_today:
+                        attendance_marked = mark_attendance(frame, d, emp_id, name)
+                        if attendance_marked:
+                            marked_today.add(emp_id)
+                            # Show confirmation message on frame
+                            cv2.putText(frame, "Attendance Marked!", (d.left(), d.top() - 20), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                else:
+                    # Unknown face
+                    cv2.putText(frame, "Unknown", (d.left() + 5, d.bottom() - 5), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        
+        # Convert frame to JPEG for streaming
         ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
+        frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
     
-    conn.close()
     cap.release()
+
+def mark_attendance(frame, face_location, emp_id, name):
+    conn = sqlite3.connect('attendance.db')
+    cursor = conn.cursor()
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    
+    # Check if attendance already marked today
+    cursor.execute("SELECT COUNT(*) FROM attendance WHERE emp_id = ? AND date = ?", 
+                  (emp_id, current_date))
+    if cursor.fetchone()[0] > 0:
+        conn.close()
+        return False  # Already marked attendance today
+    
+    # Create directory for today's attendance if it doesn't exist
+    date_dir = f"{attendance_path}{current_date}/"
+    os.makedirs(date_dir, exist_ok=True)
+    
+    # Generate filename with timestamp
+    image_path = f"{date_dir}{emp_id}_{datetime.now().strftime('%H%M%S')}.jpg"
+    
+    # Extract face region with margin
+    d = face_location
+    top, right, bottom, left = d.top(), d.right(), d.bottom(), d.left()
+    
+    # Add margin (20% of face size)
+    height, width = bottom - top, right - left
+    margin_h, margin_w = int(height * 0.2), int(width * 0.2)
+    
+    # Ensure we don't go out of frame bounds
+    top_with_margin = max(0, top - margin_h)
+    bottom_with_margin = min(frame.shape[0], bottom + margin_h)
+    left_with_margin = max(0, left - margin_w)
+    right_with_margin = min(frame.shape[1], right + margin_w)
+    
+    # Extract and save only the face region
+    face_image = frame[top_with_margin:bottom_with_margin, 
+                      left_with_margin:right_with_margin]
+    cv2.imwrite(image_path, face_image)
+    
+    # Record attendance in database
+    current_time = datetime.now().strftime('%H:%M:%S')
+    cursor.execute("INSERT INTO attendance (emp_id, name, time, date, path) VALUES (?, ?, ?, ?, ?)",
+                  (emp_id, name, current_time, current_date, image_path))
+    conn.commit()
+    conn.close()
+    
+    logging.info(f"Marked attendance for {name} (ID: {emp_id}) at {current_time}")
+    return True
 
 @app.route('/attendance_feed')
 def attendance_feed():

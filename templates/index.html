@@ -5,7 +5,7 @@
     <form method="POST" action="{{ url_for('attendance') }}" class="mb-4">
         <div class="mb-3">
             <label for="selected_date" class="form-label">Select Date</label>
-            <input type="date" class="form-control" id="selected_date" name="selected_date" required>
+            <input type="date" class="form-control" id="selected_date" name="selected_date" value="{{ today }}" required>
         </div>
         <button type="submit" class="btn btn-primary">View Attendance</button>
     </form>
@@ -17,24 +17,34 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Name</th>
+                        <th>Employee ID</th>
                         <th>Time</th>
                         <th>Image</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for name, time, path in attendance_data %}
+                    {% for name, time, path, emp_id in attendance_data %}
                         <tr>
+                            <td>{{ loop.index }}</td>
                             <td>{{ name }}</td>
+                            <td>{{ emp_id }}</td>
                             <td>{{ time }}</td>
-                            <td><img src="{{ url_for('serve_image', image_path=path) }}" alt="{{ name }}" style="max-width: 100px;"></td>
+                            <td>
+                                <a href="{{ url_for('serve_image', image_path=path) }}" target="_blank">
+                                    <img src="{{ url_for('serve_image', image_path=path) }}" alt="{{ name }}" style="max-width: 100px;">
+                                </a>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% endif %}
     {% endif %}
+    <!--
     <a href="{{ url_for('collect_faces') }}" class="btn btn-success">Collect Faces</a>
     <a href="{{ url_for('employee_list') }}" class="btn btn-info">Employee List</a>
     <a href="{{ url_for('take_attendance') }}" class="btn btn-warning">Take Attendance</a>
+    -->
 {% endblock %}

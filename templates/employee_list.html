@@ -9,26 +9,25 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Select</th>
+                    <th>ID</th>
                     <th>Name</th>
                     <th>Employee ID</th>
-                    <th>images</th>
+                    <th>Image</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
-                {% for id, name, emp_id, front_image in employees %}
+                {% for id, name, emp_id, front_image, up_image, down_image, left_image, right_image in employees %}
                     <tr>
-                        <td><input type="checkbox" name="emp_ids" value="{{ emp_id }}" checked></td>
+                        <td>
+                            {{ loop.index }}
+                            <input type="checkbox" name="emp_ids" value="{{ emp_id }}" checked>
+                        </td>
                         <td>{{ name }}</td>
                         <td>{{ emp_id }}</td>
                         <td>
-                            {% if front_image %}
-                                <img src="{{ url_for('serve_image', image_path=front_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
-                            {% else %}
-                                No Image
-                            {% endif %}                                    
-                        </td>
+                            <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#imageView{{ id }}">View</button>                                
+                        </td>                        
                         <td>
                             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ id }}">Edit</button>
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addFacesModal{{ id }}">Add Faces</button>
@@ -45,7 +44,7 @@
     </form>
 
     <!-- Edit Modals -->
-    {% for id, name, emp_id, front_image in employees %}
+    {% for id, name, emp_id, front_image, up_image, down_image, left_image, right_image in employees %}
         <div class="modal fade" id="editModal{{ id }}" tabindex="-1" aria-labelledby="editModalLabel{{ id }}" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -99,6 +98,85 @@
                             </div>
                             <center><button type="submit" class="btn btn-primary">Start Capture</button></center>
                         </form>
+                        <center>
+                        <div id="videoContainer{{ id }}" class="mt-3" style="display: none;">
+                            <img id="videoFeed{{ id }}" src="" alt="Video Feed" style="max-width: 100%;">
+                            <button id="captureButton{{ id }}" class="btn btn-success mt-2" style="display: none;" onclick="captureFace('{{ emp_id }}', '{{ id }}')">Capture</button>
+                        </div>
+                        </center>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Faces Images View Modal -->
+        <div class="modal fade" id="imageView{{ id }}" tabindex="-1" aria-labelledby="imageViewLabel{{ id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="imageViewLabel{{ id }}">{{ name }}'s Faces</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Front Image</th>
+                                    <th>Left Image</th>
+                                    <th>Right Image</th>
+                                    <th>Up Image</th>
+                                    <th>Down Image</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>
+                                        {% if front_image %}
+                                            <a href="{{ url_for('serve_image', image_path=front_image) }}" target="_blank">
+                                                <img src="{{ url_for('serve_image', image_path=front_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                                            </a>
+                                        {% else %}
+                                            No Image
+                                        {% endif %}                                    
+                                    </td>                        
+                                    <td>
+                                        {% if left_image %}
+                                            <a href="{{ url_for('serve_image', image_path=left_image) }}" target="_blank">
+                                                <img src="{{ url_for('serve_image', image_path=left_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                                            </a>
+                                        {% else %}
+                                            No Image
+                                        {% endif %}                                    
+                                    </td>
+                                    <td>
+                                        {% if right_image %}
+                                            <a href="{{ url_for('serve_image', image_path=right_image) }}" target="_blank">
+                                                <img src="{{ url_for('serve_image', image_path=right_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                                            </a>
+                                        {% else %}
+                                            No Image
+                                        {% endif %}                                    
+                                    </td>
+                                    <td>
+                                        {% if up_image %}
+                                            <a href="{{ url_for('serve_image', image_path=up_image) }}" target="_blank">
+                                                <img src="{{ url_for('serve_image', image_path=up_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                                            </a>
+                                        {% else %}
+                                            No Image
+                                        {% endif %}                                    
+                                    </td>
+                                    <td>
+                                        {% if down_image %}
+                                            <a href="{{ url_for('serve_image', image_path=down_image) }}" target="_blank">
+                                                <img src="{{ url_for('serve_image', image_path=down_image) }}" alt="{{ name }}" style="max-width: 100px; height: auto;">
+                                            </a>
+                                        {% else %}
+                                            No Image
+                                        {% endif %}                                    
+                                    </td>
+                                </tr>
+                            </tbody
                         <center>
                         <div id="videoContainer{{ id }}" class="mt-3" style="display: none;">
                             <img id="videoFeed{{ id }}" src="" alt="Video Feed" style="max-width: 100%;">
