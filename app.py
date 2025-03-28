@@ -253,6 +253,10 @@ def collect_faces():
                             instructions="Order: Front -> Up -> Down -> Left -> Right")
     return render_template('collect_faces.html')
 
+@app.route('/video_feed')
+def video_feed():
+    emp_id = request.args.get('emp_id', 'EMP')
+    return Response(gen_frames(emp_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_frames(emp_id):
     global captured_poses, manual_capture, current_pose_idx
@@ -264,20 +268,19 @@ def gen_frames(emp_id):
     
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    logging.debug(f"Starting capture with captured_poses: {captured_poses}")
-
+    
     while True:  # Changed to infinite loop to prevent stream breaking
         if len(captured_poses) >= 5:  # When all poses are captured, keep streaming but don't capture more
             ret, frame = cap.read()
             if not ret:
                 break
             frame = cv2.resize(frame, (640, 480))
-            cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, "All poses captured!", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             ret, buffer = cv2.imencode('.jpg', frame)
             yield (b'--frame\r\n'
                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            break
             # continue
-            break  # Exit the loop after streaming the last frame
             
         ret, frame = cap.read()
         if not ret:
@@ -295,27 +298,24 @@ def gen_frames(emp_id):
                 shape = predictor(frame, d)
                 pose = estimate_head_pose(shape)
                 logging.debug(f"Pose detected: {pose}")
-                
-                # Fix: Check if current_pose_idx is within bounds before accessing pose_order
-                if current_pose_idx < len(pose_order):
-                    expected_pose = pose_order[current_pose_idx]
-                    if not manual_capture and pose == expected_pose and pose not in captured_poses:
-                        face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-                        if is_image_clear(face_roi):
-                            # Use numeric emp_id format like "001_front"
-                            image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
-                            cv2.imwrite(image_path, face_roi)
-                            captured_poses[pose] = image_path
-                            logging.info(f"Captured {pose} at {image_path}")
-                            current_pose_idx += 1
-                            
-                            # Update database with image path
-                            column_name = f"{pose}_image"
-                            cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
-                                         (image_path, emp_id))
-                            conn.commit()
-                        else:
-                            logging.debug(f"Image for {pose} is blurry, skipping")
+                expected_pose = pose_order[current_pose_idx]
+                if pose == expected_pose and pose not in captured_poses:
+                    face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
+                    if is_image_clear(face_roi):
+                        # Use numeric emp_id format like "001_front"
+                        image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+                        cv2.imwrite(image_path, face_roi)
+                        captured_poses[pose] = image_path
+                        logging.info(f"Captured {pose} at {image_path}")
+                        current_pose_idx += 1
+                        
+                        # Update database with image path
+                        column_name = f"{pose}_image"
+                        cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
+                                     (image_path, emp_id))
+                        conn.commit()
+                    else:
+                        logging.debug(f"Image for {pose} is blurry, skipping")
             
             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
         
@@ -341,190 +341,7 @@ def gen_frames(emp_id):
     conn.close()
     cap.release()
 
-# def gen_frames(emp_id):
-#     global captured_poses, manual_capture, current_pose_idx
-#     cap = cv2.VideoCapture(0)
-#     if not cap.isOpened():
-#         logging.error("Cannot open camera")
-#         yield b'Camera error'
-#         return
-    
-#     conn = sqlite3.connect('attendance.db')
-#     cursor = conn.cursor()
-#     logging.debug(f"Starting capture with captured_poses: {captured_poses}")
-
-#     while True:
-#         if len(captured_poses) >= 5:  
-#             ret, frame = cap.read()
-#             if not ret:
-#                 break
-#             frame = cv2.resize(frame, (640, 480))
-#             cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-#             ret, buffer = cv2.imencode('.jpg', frame)
-#             yield (b'--frame\r\n'
-#                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-#             break  # Stop the video feed after displaying the message
-            
-#         ret, frame = cap.read()
-#         if not ret:
-#             logging.error("Failed to grab frame")
-#             break
-#         frame = cv2.resize(frame, (640, 480))
-#         faces = detector(frame, 0)
-#         pose = "None"
-#         logging.debug(f"Detected {len(faces)} faces")
-        
-#         if len(faces) == 1:
-#             d = faces[0]
-#             hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
-#             if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
-#                 shape = predictor(frame, d)
-#                 pose = estimate_head_pose(shape)
-#                 logging.debug(f"Pose detected: {pose}")
-                
-#                 if current_pose_idx < len(pose_order):
-#                     expected_pose = pose_order[current_pose_idx]
-#                     if not manual_capture and pose == expected_pose and pose not in captured_poses:
-#                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-#                         if is_image_clear(face_roi):
-#                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
-                            
-#                             # Check if image exists, if so, remove it
-#                             if os.path.exists(image_path):
-#                                 os.remove(image_path)
-#                                 logging.info(f"Old image {image_path} removed")
-                            
-#                             # Save new image
-#                             cv2.imwrite(image_path, face_roi)
-#                             captured_poses[pose] = image_path
-#                             logging.info(f"Captured {pose} at {image_path}")
-#                             current_pose_idx += 1
-                            
-#                             # Update database with new image path
-#                             column_name = f"{pose}_image"
-#                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
-#                                          (image_path, emp_id))
-#                             conn.commit()
-#                         else:
-#                             logging.debug(f"Image for {pose} is blurry, skipping")
-            
-#             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
-        
-#         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-#         if current_pose_idx < len(pose_order):
-#             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-#         cv2.putText(frame, f"Captured: {len(captured_poses)}/5", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-#         ret, buffer = cv2.imencode('.jpg', frame)
-#         frame = buffer.tobytes()
-#         yield (b'--frame\r\n'
-#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    
-#     if len(captured_poses) == 5:
-#         face_encoding = generate_3d_face_encoding(captured_poses)
-#         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
-#                       (face_encoding, emp_id))
-#         conn.commit()
-#         logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
-    
-#     conn.close()
-#     cap.release()
-
-# def gen_frames(emp_id):
-#     global captured_poses, manual_capture, current_pose_idx
-#     cap = cv2.VideoCapture(0)
-#     if not cap.isOpened():
-#         # logging.error("Cannot open camera")
-#         yield b'Camera error'
-#         return
-    
-#     conn = sqlite3.connect('attendance.db')
-#     cursor = conn.cursor()
-#     # logging.debug(f"Starting capture with captured_poses: {captured_poses}")
-
-#     while True:
-#         if len(captured_poses) >= 5:  
-#             ret, frame = cap.read()
-#             if not ret:
-#                 break
-#             frame = cv2.resize(frame, (640, 480))
-#             cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-#             ret, buffer = cv2.imencode('.jpg', frame)
-#             yield (b'--frame\r\n'
-#                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-#             break  # Stop the video feed after displaying the message
-            
-#         ret, frame = cap.read()
-#         if not ret:
-#             # logging.error("Failed to grab frame")
-#             break
-#         frame = cv2.resize(frame, (640, 480))
-#         faces = detector(frame, 0)
-#         pose = "None"
-#         # logging.debug(f"Detected {len(faces)} faces")
-        
-#         if len(faces) == 1:
-#             d = faces[0]
-#             hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
-#             if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
-#                 shape = predictor(frame, d)
-#                 pose = estimate_head_pose(shape)
-#                 logging.debug(f"Pose detected: {pose}")
-                
-#                 if current_pose_idx < len(pose_order):
-#                     expected_pose = pose_order[current_pose_idx]
-#                     if not manual_capture and pose == expected_pose and pose not in captured_poses:
-#                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
-#                         if is_image_clear(face_roi):  # Only save if image is clear
-#                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
-                            
-#                             # Check if image exists, if so, remove it
-#                             if os.path.exists(image_path):
-#                                 os.remove(image_path)
-#                                 logging.info(f"Old image {image_path} removed")
-                            
-#                             # Save new image
-#                             cv2.imwrite(image_path, face_roi)
-#                             captured_poses[pose] = image_path
-#                             logging.info(f"Captured {pose} at {image_path}")
-#                             current_pose_idx += 1
-                            
-#                             # Update database with new image path
-#                             column_name = f"{pose}_image"
-#                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
-#                                          (image_path, emp_id))
-#                             conn.commit()
-#                         else:
-#                             logging.debug(f"Image for {pose} is blurry, skipping")  # Log message when skipping blur
-            
-#             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
-        
-#         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-#         if current_pose_idx < len(pose_order):
-#             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-#         cv2.putText(frame, f"Captured: {len(captured_poses)}/5", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-#         ret, buffer = cv2.imencode('.jpg', frame)
-#         frame = buffer.tobytes()
-#         yield (b'--frame\r\n'
-#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    
-#     if len(captured_poses) == 5:
-#         face_encoding = generate_3d_face_encoding(captured_poses)
-#         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
-#                       (face_encoding, emp_id))
-#         conn.commit()
-#         logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
-    
-#     conn.close()
-#     cap.release()
-
-@app.route('/video_feed')
-def video_feed():
-    emp_id = request.args.get('emp_id', 'EMP')
-    return Response(gen_frames(emp_id), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/add_faces')
+@app.route('/add_faces', methods=['GET', 'POST'])
 def add_faces():
     emp_id = request.args.get('emp_id')
     name = request.args.get('name')
@@ -579,7 +396,6 @@ def gen_frames2(emp_id, name):
                             if not os.path.isdir(path_photos_from_camera):
                                 os.makedirs(path_photos_from_camera)
                                 
-                            #data/faces/02_Kousik Mazumdar/02_front.jpg
                             current_face_dir = f"{path_photos_from_camera}{emp_id}_{name}"
                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
                             
@@ -623,6 +439,7 @@ def gen_frames2(emp_id, name):
     
     conn.close()
     cap.release()
+
 
 @app.route('/manual_capture', methods=['POST'])
 def manual_capture():
@@ -691,35 +508,166 @@ def manual_capture():
     
     return jsonify({'status': 'success', 'message': f'Captured {pose}', 'pose': pose, 'captured_count': len(captured_poses)})
 
+
 @app.route('/employee_list', methods=['GET', 'POST'])
 def employee_list():
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, emp_id, front_image FROM attendance_employee GROUP BY emp_id")
-    employees = cursor.fetchall()
+    message = None
     
     if request.method == 'POST':
         if 'update_encodings' in request.form:
             selected_emp_ids = request.form.getlist('emp_ids')
-            cursor.execute("SELECT emp_id, front_image, up_image, down_image, left_image, right_image FROM attendance_employee WHERE emp_id IN ({})".format(
-                ','.join('?' for _ in selected_emp_ids)), selected_emp_ids)
-            employee_images = cursor.fetchall()
-            
-            for emp_id, front, up, down, left, right in employee_images:
-                images = {'front': front, 'up': up, 'down': down, 'left': left, 'right': right}
-                face_encoding = generate_3d_face_encoding(images)
-                if face_encoding:
-                    cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?", (face_encoding, emp_id))
-            conn.commit()
-            conn.close()
-            return render_template('employee_list.html', employees=employees, message="Face encodings updated")
+            if selected_emp_ids:
+                cursor.execute("SELECT emp_id, front_image, up_image, down_image, left_image, right_image FROM attendance_employee WHERE emp_id IN ({})".format(
+                    ','.join('?' for _ in selected_emp_ids)), selected_emp_ids)
+                employee_images = cursor.fetchall()
+                
+                updated_count = 0
+                for emp_id, front, up, down, left, right in employee_images:
+                    images = {'front': front, 'up': up, 'down': down, 'left': left, 'right': right}
+                    face_encoding = generate_3d_face_encoding(images)
+                    if face_encoding:
+                        cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?", (face_encoding, emp_id))
+                        updated_count += 1
+                conn.commit()
+                message = f"Face encodings updated for {updated_count} employees"
+            else:
+                message = "No employees selected for encoding update"
+        
+        elif 'delete_employees' in request.form:
+            selected_emp_ids = request.form.getlist('emp_ids')
+            if selected_emp_ids:
+                # First get all the image paths for the selected employees
+                cursor.execute("""
+                    SELECT emp_id, name, front_image, up_image, down_image, left_image, right_image 
+                    FROM attendance_employee 
+                    WHERE emp_id IN ({})
+                """.format(','.join('?' for _ in selected_emp_ids)), selected_emp_ids)
+                employees_to_delete = cursor.fetchall()
+                
+                deleted_count = 0
+                for emp in employees_to_delete:
+                    emp_id, name = emp[0], emp[1]
+                    image_paths = emp[2:7]  # All image paths
+                    
+                    # Delete all image files
+                    for path in image_paths:
+                        if path and os.path.exists(path):
+                            try:
+                                os.remove(path)
+                                logging.info(f"Deleted file: {path}")
+                            except Exception as e:
+                                logging.error(f"Error deleting file {path}: {e}")
+                    
+                    # Delete the employee directory
+                    emp_dir = f"{path_photos_from_camera}{emp_id}_{name}"
+                    if os.path.exists(emp_dir):
+                        try:
+                            import shutil
+                            shutil.rmtree(emp_dir)
+                            logging.info(f"Deleted directory: {emp_dir}")
+                        except Exception as e:
+                            logging.error(f"Error deleting directory {emp_dir}: {e}")
+                    
+                    # Delete from database
+                    cursor.execute("DELETE FROM attendance_employee WHERE emp_id = ?", (emp_id,))
+                    # Also delete from attendance table
+                    cursor.execute("DELETE FROM attendance WHERE emp_id = ?", (emp_id,))
+                    deleted_count += 1
+                
+                conn.commit()
+                message = f"Successfully deleted {deleted_count} employees and their data"
+            else:
+                message = "No employees selected for deletion"
         
         elif 'edit_employee' in request.form:
-            emp_id = request.form.get('emp_id')
+            old_emp_id = request.form.get('emp_id')
             name = request.form.get('name')
             new_emp_id = request.form.get('new_emp_id')
             new_image = request.files.get('new_image')
             
+            # First, get the current employee data including image paths
+            cursor.execute("SELECT name, front_image, up_image, down_image, left_image, right_image FROM attendance_employee WHERE emp_id = ?", 
+                          (old_emp_id,))
+            employee_data = cursor.fetchone()
+            
+            if employee_data:
+                old_name = employee_data[0]
+                image_paths = {
+                    'front_image': employee_data[1],
+                    'up_image': employee_data[2],
+                    'down_image': employee_data[3],
+                    'left_image': employee_data[4],
+                    'right_image': employee_data[5]
+                }
+                
+                # Update image file paths if emp_id changed
+                if old_emp_id != new_emp_id:
+                    import shutil
+                    
+                    # Get the old directory path
+                    old_dir = f"{path_photos_from_camera}{old_emp_id}_{old_name}"
+                    
+                    # Create new directory for the updated employee ID if it doesn't exist
+                    new_dir = f"{path_photos_from_camera}{new_emp_id}_{name}"
+                    os.makedirs(new_dir, exist_ok=True)
+                    
+                    # Update each image path and move the files
+                    updated_paths = {}
+                    for pose, old_path in image_paths.items():
+                        if old_path:  # Only process if there's an actual path
+                            # Extract pose from the filename (e.g., "001_front.jpg" -> "front")
+                            pose_name = pose.split('_')[0]  # This gets "front" from "front_image"
+                            
+                            # Create new path
+                            new_path = f"{new_dir}/{new_emp_id}_{pose_name}.jpg"
+                            
+                            # Move the file if it exists
+                            if os.path.exists(old_path):
+                                try:
+                                    # Copy the file to new location
+                                    shutil.copy2(old_path, new_path)
+                                    logging.info(f"Copied image from {old_path} to {new_path}")
+                                    updated_paths[pose] = new_path
+                                except Exception as e:
+                                    logging.error(f"Error copying file: {e}")
+                                    updated_paths[pose] = old_path  # Keep old path if copy fails
+                            else:
+                                updated_paths[pose] = old_path  # Keep old path if file doesn't exist
+                        else:
+                            updated_paths[pose] = None
+                    
+                    # Update database with new paths
+                    cursor.execute("""
+                        UPDATE attendance_employee 
+                        SET name = ?, emp_id = ?, front_image = ?, up_image = ?, down_image = ?, left_image = ?, right_image = ? 
+                        WHERE emp_id = ?
+                    """, (name, new_emp_id, updated_paths['front_image'], updated_paths['up_image'], 
+                          updated_paths['down_image'], updated_paths['left_image'], updated_paths['right_image'], old_emp_id))
+                    
+                    # Delete old files after successful database update
+                    for old_path in image_paths.values():
+                        if old_path and os.path.exists(old_path):
+                            try:
+                                os.remove(old_path)
+                                logging.info(f"Deleted old file: {old_path}")
+                            except Exception as e:
+                                logging.error(f"Error deleting file {old_path}: {e}")
+                    
+                    # Delete the old directory if it exists
+                    if os.path.exists(old_dir):
+                        try:
+                            # Try to remove the directory and its contents
+                            shutil.rmtree(old_dir)
+                            logging.info(f"Deleted old directory and contents: {old_dir}")
+                        except Exception as e:
+                            logging.error(f"Error deleting directory {old_dir}: {e}")
+                else:
+                    # If emp_id didn't change, just update the name
+                    cursor.execute("UPDATE attendance_employee SET name = ? WHERE emp_id = ?", (name, old_emp_id))
+            
+            # Handle new image upload if provided
             if new_image:
                 new_image_path = f"{path_photos_from_camera}{new_emp_id}_edited_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
                 new_image.save(new_image_path)
@@ -730,20 +678,22 @@ def employee_list():
                     shape = predictor(img, faces[0])
                     face_encoding = face_reco_model.compute_face_descriptor(img, shape)
                     face_encoding_bytes = np.array(face_encoding).tobytes()
-                cursor.execute("UPDATE attendance_employee SET name = ?, emp_id = ?, face_encoding = ? WHERE emp_id = ?",
-                               (name, new_emp_id, face_encoding_bytes, emp_id))
-            else:
-                cursor.execute("UPDATE attendance_employee SET name = ?, emp_id = ? WHERE emp_id = ?",
-                               (name, new_emp_id, emp_id))
+                cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?", 
+                              (face_encoding_bytes, new_emp_id))
+            
+            # Also update the attendance table to maintain referential integrity
+            cursor.execute("UPDATE attendance SET emp_id = ?, name = ? WHERE emp_id = ?", 
+                          (new_emp_id, name, old_emp_id))
+            
             conn.commit()
-            conn.close()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, name, emp_id, front_image FROM attendance_employee GROUP BY emp_id")
-            employees = cursor.fetchall()
-            return render_template('employee_list.html', employees=employees, message=f"Employee {emp_id} updated")
+            message = f"Employee {old_emp_id} updated to {new_emp_id}"
+    
+    # Fetch the latest employee data
+    cursor.execute("SELECT id, name, emp_id, front_image FROM attendance_employee GROUP BY emp_id")
+    employees = cursor.fetchall()
     
     conn.close()
-    return render_template('employee_list.html', employees=employees)
+    return render_template('employee_list.html', employees=employees, message=message)
 
 @app.route('/images/<path:image_path>')
 def serve_image(image_path):

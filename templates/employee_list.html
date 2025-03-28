@@ -38,6 +38,10 @@
             </tbody>
         </table>
         <button type="submit" name="update_encodings" class="btn btn-primary">Update Face Encodings</button>
+        <button type="submit" name="delete_employees" class="btn btn-danger"
+        onclick="return confirm('Are you sure you want to delete the selected employees?')">
+        Delete Selected
+        </button>
     </form>
 
     <!-- Edit Modals -->
@@ -75,13 +79,13 @@
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="addFacesModalLabel{{ id }}">Add Faces: {{ name }}</h5>
+                        <h5 class="modal-title" id="addFacesModalLabel{{ id }}">Add Faces: <span class="badge bg-blue-lt">{{ name }}</span></h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <form id="addFacesForm{{ id }}" method="POST" action="{{ url_for('add_faces') }}">
-                            <input type="hidden1" name="emp_id" value="{{ emp_id }}">
-                            <input type="hidden1" name="name" value="{{ name }}">
+                            <input type="hidden" name="emp_id" value="{{ emp_id }}">
+                            <input type="hidden" name="name" value="{{ name }}">
                             <div class="mb-3" hidden>
                                 <label class="form-label">Capture Mode</label>
                                 <div class="form-check">
@@ -93,7 +97,7 @@
                                     <label class="form-check-label" for="manual{{ id }}">Manual</label>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Start Capture</button>
+                            <center><button type="submit" class="btn btn-primary">Start Capture</button></center>
                         </form>
                         <div id="videoContainer{{ id }}" class="mt-3" style="display: none;">
                             <img id="videoFeed{{ id }}" src="" alt="Video Feed" style="max-width: 100%;">
@@ -110,6 +114,7 @@
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 const empId = this.querySelector('input[name="emp_id"]').value;
+                const name = this.querySelector('input[name="name"]').value;
                 const id = this.id.replace('addFacesForm', '');
                 const captureMode = this.querySelector('input[name="capture_mode"]:checked').value;
                 const videoContainer = document.getElementById(`videoContainer${id}`);
@@ -118,15 +123,14 @@
 
                 videoContainer.style.display = 'block';
                 if (captureMode === 'auto') {
-                    videoFeed.src = `{{ url_for('video_feed') }}?emp_id=${empId}`;
+                    videoFeed.src = `{{ url_for('add_faces') }}?emp_id=${empId}&name=${name}`;
                     captureButton.style.display = 'none';
                 } else {
-                    videoFeed.src = `{{ url_for('video_feed') }}?emp_id=${empId}`;
+                    videoFeed.src = `{{ url_for('add_faces') }}?emp_id=${empId}&name=${name}`;
                     captureButton.style.display = 'block';
                 }
             });
         });
-
     </script>
 
     <script>
