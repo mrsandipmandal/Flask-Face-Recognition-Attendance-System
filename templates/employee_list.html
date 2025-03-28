@@ -79,9 +79,9 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form id="addFacesForm{{ id }}" method="POST" action="{{ url_for('collect_faces') }}">
-                            <input type="hidden" name="emp_id" value="{{ emp_id }}">
-                            <input type="hidden" name="name" value="{{ name }}">
+                        <form id="addFacesForm{{ id }}" method="POST" action="{{ url_for('add_faces') }}">
+                            <input type="hidden1" name="emp_id" value="{{ emp_id }}">
+                            <input type="hidden1" name="name" value="{{ name }}">
                             <div class="mb-3" hidden>
                                 <label class="form-label">Capture Mode</label>
                                 <div class="form-check">
