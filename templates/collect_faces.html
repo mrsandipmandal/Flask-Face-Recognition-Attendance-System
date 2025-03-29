@@ -1,41 +1,51 @@
-{% extends "base.html" %}
-{% block title %}Collect Faces{% endblock %}
-{% block content %}
-    <h1>Collect Faces Dataset</h1>
-    <form method="POST" action="{{ url_for('collect_faces') }}" class="mb-4">
-        <div class="mb-3">
-            <label for="name" class="form-label">Enter Name</label>
-            <input type="text" class="form-control" id="name" name="name" required>
-        </div>
-        <div class="mb-3">
-            <label for="emp_id" class="form-label">Employee ID</label>
-            <input type="text" class="form-control" id="emp_id" name="emp_id" required>
-        </div>
-        <div class="mb-3">
-            <label for="capture_mode" class="form-label" hidden>Capture Mode</label>
-            <select class="form-control" id="capture_mode" name="capture_mode" hidden>
-                <option value="auto">Automatic</option>
-                <option value="manual">Manual</option>
-            </select>
-        </div>
-        <button type="submit" class="btn btn-primary">Start Collecting</button>
-    </form>
-    {% if message %}
-        <div class="alert alert-info">{{ message }}</div>
-    {% endif %}
-    {% if instructions %}
-        <div class="alert alert-warning">{{ instructions }}</div>
-    {% endif %}
-    {% if video_feed %}
-        <h3>Live Video Feed</h3>
-        <img src="{{ url_for('video_feed', emp_id=emp_id) }}" class="img-fluid" alt="Video Feed">
-    {% endif %}
-    {% if manual %}
-        <h3>Manual Capture</h3>
-        <p>Position your head and click to capture in this order: Front -> Up -> Down -> Left -> Right</p>
-        <form method="POST" action="{{ url_for('manual_capture') }}" class="mt-3">
-            <input type="hidden" name="emp_id" value="{{ emp_id }}">
-            <button type="submit" class="btn btn-success">Capture Current Pose</button>
-        </form>
-    {% endif %}
-{% endblock %}
+{% extends "base.html" %} {% block title %}Employee Entry{% endblock %} {% block
+content %}
+<h1>Employee Entry</h1>
+<div class="container">
+  <form method="POST" action="{{ url_for('collect_faces') }}" class="mb-4">
+    <div class="mb-3">
+      <label for="name" class="form-label">Enter Name</label>
+      <input type="text" class="form-control" id="name" name="name" required />
+    </div>
+    <div class="mb-3">
+      <label for="emp_id" class="form-label">Employee ID</label>
+      <input
+        type="text"
+        class="form-control"
+        id="emp_id"
+        name="emp_id"
+        required
+      />
+    </div>
+    <div class="mb-3">
+      <label for="capture_mode" class="form-label" hidden>Capture Mode</label>
+      <select class="form-control" id="capture_mode" name="capture_mode" hidden>
+        <option value="auto">Automatic</option>
+        <option value="manual">Manual</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit & Start Collecting Faces</button>
+  </form>
+  {% if message %}
+  <div class="alert alert-info">{{ message }}</div>
+  {% endif %} {% if instructions %}
+  <div class="alert alert-warning">{{ instructions }}</div>
+  {% endif %} {% if video_feed %}
+  <h3>Live Video Feed</h3>
+  <img
+    src="{{ url_for('video_feed', emp_id=emp_id) }}"
+    class="img-fluid"
+    alt="Video Feed"
+  />
+  {% endif %} {% if manual %}
+  <h3>Manual Capture</h3>
+  <p>
+    Position your head and click to capture in this order: Front -> Up -> Down
+    -> Left -> Right
+  </p>
+  <form method="POST" action="{{ url_for('manual_capture') }}" class="mt-3">
+    <input type="hidden" name="emp_id" value="{{ emp_id }}" />
+    <button type="submit" class="btn btn-success">Capture Current Pose</button>
+  </form>
+</div>
+{% endif %} {% endblock %}

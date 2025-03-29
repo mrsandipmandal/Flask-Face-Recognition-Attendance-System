@@ -11,16 +11,20 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">Attendance System</a>
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('collect_faces') }}">Employee Entry</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('employee_list') }}">Employee List</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('take_attendance') }}">Take Attendance</a></li>
-                </ul>
+          <a class="navbar-brand" href="{{ url_for('index') }}">Attendance System</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+            <div class="navbar-nav">
+              <a class="nav-link" href="{{ url_for('collect_faces') }}">Employee Entry</a>
+              <a class="nav-link" href="{{ url_for('employee_list') }}">Employee List</a>
+              <a class="nav-link" href="{{ url_for('take_attendance') }}">Take Attendance</a>
+              <a class="nav-link" href="{{ url_for('attendance_list') }}">Attendance List</a>
             </div>
+          </div>
         </div>
-    </nav>
+      </nav>
     <div class="container mt-4">
         {% block content %}{% endblock %}
     </div>

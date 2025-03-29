@@ -2,14 +2,17 @@
 {% block title %}Take Attendance{% endblock %}
 {% block content %}
     <h1>Take Attendance</h1>
+    <center>
     <a href="{{ url_for('start_attendance') }}" class="btn btn-primary mb-4">Start Attendance</a>
     {% if message %}
         <div class="alert alert-info">{{ message }}</div>
     {% endif %}
-    {% if video_feed %}
-    <center>
-        <h3>Live Attendance Feed</h3>
-        <img src="{{ url_for('attendance_feed') }}" class="img-fluid" alt="Attendance Feed">
+
+    <div class="mb-3">
+        {% if video_feed %}
+            <h3>Live Attendance Feed</h3>
+            <img src="{{ url_for('attendance_feed') }}" class="img-fluid" alt="Attendance Feed">
+        {% endif %}
+    </div>
     </center>
-    {% endif %}
 {% endblock %}

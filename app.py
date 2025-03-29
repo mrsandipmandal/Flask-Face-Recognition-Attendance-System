@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, Response, send_file, jsonify
+from flask import Flask, render_template, request, Response, send_file, jsonify, redirect, url_for
 import sqlite3
 from datetime import datetime
 import cv2
@@ -165,24 +165,133 @@ def generate_3d_face_encoding(images):
 
 @app.route('/')
 def index():
-    today = date.today().strftime('%Y-%m-%d')  # Format as YYYY-MM-DD for HTML date input
-    return render_template('index.html', selected_date='', no_data=False, today=today)
+    return render_template('index.html')
+
+@app.route('/attendance_list')
+def attendance_list():
+    today = date.today().strftime('%Y-%m-%d')
+    return render_template('attendance_list.html', selected_date='', no_data=False, today=today)
+
+# @app.route('/attendance', methods=['GET', 'POST'])
+# def attendance():
+#     if request.method == 'POST':
+#         conn = sqlite3.connect('attendance.db')
+#         cursor = conn.cursor()
+#         if 'delete_attendance' in request.form:
+#             selected_emp_ids = request.form.getlist('emp_ids')
+#             if selected_emp_ids:
+#                 # First get all the image paths for the selected employees
+#                 cursor.execute("""
+#                     SELECT emp_id, name, time, date, path 
+#                     FROM attendance 
+#                     WHERE emp_id IN ({})
+#                 """.format(','.join('?' for _ in selected_emp_ids)), selected_emp_ids)
+#                 attendance_to_delete = cursor.fetchall()
+                
+#                 deleted_count = 0
+#                 for emp in attendance_to_delete:
+#                     emp_id, name = emp[0], emp[1]
+#                     image_paths = emp[4]  # image paths
+#                     print(f"Image Path : {image_paths}")
+#                     # Delete image files
+#                     for path in image_paths:
+#                         if path and os.path.exists(path):
+#                             try:
+#                                 os.remove(path)
+#                                 logging.info(f"Deleted file: {path}")
+#                             except Exception as e:
+#                                 logging.error(f"Error deleting file {path}: {e}")
+                    
+#                     # Also delete from attendance table
+#                     cursor.execute("DELETE FROM attendance WHERE emp_id = ?", (emp_id,))
+#                     deleted_count += 1
+                
+#                 conn.commit()
+#                 message = f"Successfully deleted {deleted_count} attendance and their data"
+#             else:
+#                 message = "No attendance selected for deletion"
+        
+#         selected_date = request.form.get('selected_date')
+#         selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d')
+#         formatted_date = selected_date_obj.strftime('%Y-%m-%d')
+#         cursor.execute("SELECT name, time, path, emp_id FROM attendance WHERE date = ?", (formatted_date,))
+#         attendance_data = cursor.fetchall()
+#         conn.close()
+#         if not attendance_data:
+#             return render_template('attendance_list.html', selected_date=selected_date, no_data=True, today = selected_date)
+#         return render_template('attendance_list.html', selected_date=selected_date, attendance_data=attendance_data, today = selected_date)
+#     return render_template('attendance_list.html', selected_date='', no_data=False, today = selected_date)
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
     if request.method == 'POST':
-        selected_date = request.form.get('selected_date')
-        selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d')
-        formatted_date = selected_date_obj.strftime('%Y-%m-%d')
+        # Initialize database connection and cursor at the beginning of the function
         conn = sqlite3.connect('attendance.db')
         cursor = conn.cursor()
+        
+        if 'delete_attendance' in request.form:
+            selected_emp_ids = request.form.getlist('emp_ids')
+            if selected_emp_ids:
+                # First get all the image paths for the selected employees
+                cursor.execute("""
+                    SELECT emp_id, name, time, date, path 
+                    FROM attendance 
+                    WHERE emp_id IN ({})
+                """.format(','.join('?' for _ in selected_emp_ids)), selected_emp_ids)
+                attendance_to_delete = cursor.fetchall()
+                
+                deleted_count = 0
+                for emp in attendance_to_delete:
+                    emp_id, name = emp[0], emp[1]
+                    image_path = emp[4]  # image path
+                    
+                    # Delete image file if it exists
+                    if image_path and os.path.exists(image_path):
+                        try:
+                            os.remove(image_path)
+                            logging.info(f"Deleted file: {image_path}")
+                        except Exception as e:
+                            logging.error(f"Error deleting file {image_path}: {e}")
+                    
+                    # Also delete from attendance table
+                    cursor.execute("DELETE FROM attendance WHERE emp_id = ?", (emp_id,))
+                    deleted_count += 1
+                
+                conn.commit()
+                message = f"Successfully deleted {deleted_count} attendance and their data"
+            else:
+                message = "No attendance selected for deletion"
+        
+        # Get the selected date from the form
+        selected_date = request.form.get('selected_date')
+        
+        # Check if selected_date is None or empty
+        if not selected_date:
+            # Use today's date as default if no date is selected
+            selected_date = date.today().strftime('%Y-%m-%d')
+            formatted_date = selected_date
+        else:
+            # Parse the date if it's provided
+            try:
+                selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d')
+                formatted_date = selected_date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                # Handle invalid date format
+                formatted_date = date.today().strftime('%Y-%m-%d')
+                selected_date = formatted_date
+        
+        # Use the existing connection if we're in a POST request
         cursor.execute("SELECT name, time, path, emp_id FROM attendance WHERE date = ?", (formatted_date,))
         attendance_data = cursor.fetchall()
         conn.close()
+        
         if not attendance_data:
-            return render_template('index.html', selected_date=selected_date, no_data=True)
-        return render_template('index.html', selected_date=selected_date, attendance_data=attendance_data)
-    return render_template('index.html', selected_date='', no_data=False)
+            return render_template('attendance_list.html', selected_date=selected_date, no_data=True, today=selected_date)
+        return render_template('attendance_list.html', selected_date=selected_date, attendance_data=attendance_data, today=selected_date)
+    
+    # For GET requests
+    today = date.today().strftime('%Y-%m-%d')
+    return render_template('attendance_list.html', selected_date='', no_data=False, today=today)
 
 # @app.route('/collect_faces', methods=['GET', 'POST'])
 # def collect_faces():
@@ -344,15 +453,117 @@ def gen_frames(emp_id):
     conn.close()
     cap.release()
 
+@app.route('/check_capture_status')
+def check_capture_status():
+    complete = len(captured_poses) >= 5
+    return jsonify({'complete': complete})
+
+
 @app.route('/add_faces', methods=['GET', 'POST'])
 def add_faces():
     emp_id = request.args.get('emp_id')
     name = request.args.get('name')
-    logging.debug(f"Received emp_id: {emp_id}, name: {name}")
     return Response(gen_frames2(emp_id, name), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# def gen_frames2(emp_id, name):
+#     global captured_poses, current_pose_idx
+
+#     # Reset pose tracking for each new employee
+#     captured_poses = {}  
+#     current_pose_idx = 0  
+
+#     cap = cv2.VideoCapture(0)
+#     if not cap.isOpened():
+#         yield b'Camera error'
+#         return
+    
+#     conn = sqlite3.connect('attendance.db')
+#     cursor = conn.cursor()
+    
+#     while True:
+#         if len(captured_poses) >= 5:  
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#             frame = cv2.resize(frame, (640, 480))
+#             cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n'
+#                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             break
+            
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
+#         frame = cv2.resize(frame, (640, 480))
+#         faces = detector(frame, 0)
+#         pose = "None"
+        
+#         if len(faces) == 1:
+#             d = faces[0]
+#             hh, ww = int((d.bottom() - d.top()) / 2), int((d.right() - d.left()) / 2)
+#             if (d.right() + ww <= 640 and d.bottom() + hh <= 480 and d.left() - ww >= 0 and d.top() - hh >= 0):
+#                 shape = predictor(frame, d)
+#                 pose = estimate_head_pose(shape)
+#                 logging.debug(f"Pose detected: {pose}")
+                
+#                 if current_pose_idx < len(pose_order):
+#                     expected_pose = pose_order[current_pose_idx]
+#                     logging.debug(f"Expected pose: {expected_pose}, pose in captured_poses: {pose in captured_poses}")
+
+#                     if pose == expected_pose and pose not in captured_poses:
+#                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
+#                         if is_image_clear(face_roi):
+#                             if not os.path.isdir(path_photos_from_camera):
+#                                 os.makedirs(path_photos_from_camera)
+                                
+#                             current_face_dir = f"{path_photos_from_camera}{emp_id}_{name}"
+#                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
+                            
+#                             if os.path.exists(image_path):
+#                                 os.remove(image_path)
+#                                 logging.info(f"Old image {image_path} removed")
+                            
+#                             cv2.imwrite(image_path, face_roi)
+#                             captured_poses[pose] = image_path
+#                             logging.info(f"Captured {pose} at {image_path}")
+#                             current_pose_idx += 1
+                            
+#                             column_name = f"{pose}_image"
+#                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
+#                                          (image_path, emp_id))
+#                             conn.commit()
+#                         else:
+#                             logging.debug(f"Image for {pose} is blurry, skipping")
+
+#             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
+        
+#         cv2.putText(frame, f"Pose: {pose}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#         if current_pose_idx < len(pose_order):
+#             cv2.putText(frame, f"Next: {pose_order[current_pose_idx]}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+#         cv2.putText(frame, f"Captured: {len(captured_poses)}/5", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+#         ret, buffer = cv2.imencode('.jpg', frame)
+#         frame = buffer.tobytes()
+#         yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+#     if len(captured_poses) == 5:
+#         face_encoding = generate_3d_face_encoding(captured_poses)
+#         cursor.execute("UPDATE attendance_employee SET face_encoding = ? WHERE emp_id = ?",
+#                       (face_encoding, emp_id))
+#         conn.commit()
+#         logging.info(f"Saved 3D encoding for employee ID: {emp_id}")
+    
+#     conn.close()
+#     cap.release()
 
 def gen_frames2(emp_id, name):
     global captured_poses, current_pose_idx
+
+    captured_poses = {}  
+    current_pose_idx = 0  
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         yield b'Camera error'
@@ -367,10 +578,13 @@ def gen_frames2(emp_id, name):
             if not ret:
                 break
             frame = cv2.resize(frame, (640, 480))
-            cv2.putText(frame, "All poses captured Thank You.", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, "All poses captured. Thank You!", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             ret, buffer = cv2.imencode('.jpg', frame)
             yield (b'--frame\r\n'
-                  b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            
+            # Send a signal to frontend to stop streaming and redirect
+            yield b"--frame\r\nContent-Type: text/plain\r\n\r\nREDIRECT\r\n"
             break
             
         ret, frame = cap.read()
@@ -390,9 +604,7 @@ def gen_frames2(emp_id, name):
                 
                 if current_pose_idx < len(pose_order):
                     expected_pose = pose_order[current_pose_idx]
-                    logging.debug(f"Expected pose: {expected_pose}, pose in captured_poses: {pose in captured_poses}")
 
-                    # Removed the manual_capture condition check
                     if pose == expected_pose and pose not in captured_poses:
                         face_roi = frame[d.top() - hh:d.bottom() + hh, d.left() - ww:d.right() + ww]
                         if is_image_clear(face_roi):
@@ -402,24 +614,17 @@ def gen_frames2(emp_id, name):
                             current_face_dir = f"{path_photos_from_camera}{emp_id}_{name}"
                             image_path = f"{current_face_dir}/{emp_id}_{pose}.jpg"
                             
-                            # Check if image exists, if so, remove it
                             if os.path.exists(image_path):
                                 os.remove(image_path)
-                                logging.info(f"Old image {image_path} removed")
                             
-                            # Save new image
                             cv2.imwrite(image_path, face_roi)
                             captured_poses[pose] = image_path
-                            logging.info(f"Captured {pose} at {image_path}")
                             current_pose_idx += 1
                             
-                            # Update database with new image path
                             column_name = f"{pose}_image"
                             cursor.execute(f"UPDATE attendance_employee SET {column_name} = ? WHERE emp_id = ?",
                                          (image_path, emp_id))
                             conn.commit()
-                        else:
-                            logging.debug(f"Image for {pose} is blurry, skipping")
 
             cv2.rectangle(frame, (d.left() - ww, d.top() - hh), (d.right() + ww, d.bottom() + hh), (255, 255, 255), 2)
         
@@ -442,7 +647,6 @@ def gen_frames2(emp_id, name):
     
     conn.close()
     cap.release()
-
 
 @app.route('/manual_capture', methods=['POST'])
 def manual_capture():
@@ -510,7 +714,6 @@ def manual_capture():
     conn.close()
     
     return jsonify({'status': 'success', 'message': f'Captured {pose}', 'pose': pose, 'captured_count': len(captured_poses)})
-
 
 @app.route('/employee_list', methods=['GET', 'POST'])
 def employee_list():
@@ -707,7 +910,7 @@ def take_attendance():
 
 @app.route('/start_attendance')
 def start_attendance():
-    return render_template('take_attendance.html', message="Attendance started", video_feed=True)
+    return render_template('take_attendance.html', message="", video_feed=True)
 
 # def gen_attendance_frames():
 #     conn = sqlite3.connect('attendance.db')
